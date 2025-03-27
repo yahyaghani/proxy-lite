@@ -1,6 +1,6 @@
 import base64
 from functools import cached_property
-from typing import Any, Literal, Optional, Self
+from typing import Any, Literal, Optional, Self, Dict
 
 from proxy_lite.browser.browser import BrowserSession
 from proxy_lite.environments.environment_base import (
@@ -29,7 +29,7 @@ class WebBrowserEnvironmentConfig(BaseEnvironmentConfig):
     headless: bool = True
     keep_original_image: bool = False
     no_pois_in_image: bool = False
-
+    credentials: Optional[dict[str, dict[str, str]]] = None
 
 @Environments.register_environment("webbrowser")
 class WebBrowserEnvironment(BaseEnvironment):
@@ -58,6 +58,17 @@ class WebBrowserEnvironment(BaseEnvironment):
         # Clean up the BrowserSession
         await self.browser.__aexit__(exc_type, exc_value, traceback)
 
+    def get_credentials_for_domain(self, domain: str) -> Optional[dict[str, str]]:
+    """Get credentials for a specific domain if available."""
+    if not self.config.credentials:
+        return None
+    
+    # Check if any credential key matches part of the domain
+    for website, creds in self.config.credentials.items():
+        if website.lower() in domain.lower():
+            return creds
+    return None
+
     @property
     def info_for_user(self) -> str:
         return "This is a web browser environment. You can navigate the web, search the web, and perform actions on the web."  # noqa: E501
@@ -76,33 +87,45 @@ class WebBrowserEnvironment(BaseEnvironment):
 
     async def initialise(self) -> Observation:
         await self.browser.goto(self.config.homepage)
-        original_img, annotated_img = await self.browser.screenshot(
-            delay=self.config.screenshot_delay,
-        )
-        if self.config.no_pois_in_image:
-            base64_image = base64.b64encode(original_img).decode("utf-8")
-        else:
-            base64_image = base64.b64encode(annotated_img).decode("utf-8")
+            original_img, annotated_img = await self.browser.screenshot(
+                delay=self.config.screenshot_delay,
+            )
+            if self.config.no_pois_in_image:
+                base64_image = base64.b64encode(original_img).decode("utf-8")
+            else:
+                base64_image = base64.b64encode(annotated_img).decode("utf-8")
 
-        html_content = await self.browser.current_page.content() if self.config.include_html else None
+            html_content = await self.browser.current_page.content() if self.config.include_html else None
 
-        info = {"url": self.browser.current_url}
-        if self.config.record_pois:
-            info["pois"] = self.browser.pois
-        if self.config.keep_original_image:
-            info["original_image"] = base64.b64encode(original_img).decode("utf-8")
+            info = {"url": self.browser.current_url}
+            if self.config.record_pois:
+                info["pois"] = self.browser.pois
+            if self.config.keep_original_image:
+                info["original_image"] = base64.b64encode(original_img).decode("utf-8")
+            
+            # Check for credentials for the current domain
+            current_domain = self.browser.current_url.split("//")[-1].split("/")[0]
+            credentials = self.get_credentials_for_domain(current_domain)
+            
+            credential_info = ""
+            if credentials:
+                credential_info = f"\n[System: Credentials available for {current_domain}: username='{credentials['username']}', password is stored]"
 
-        return Observation(
-            state=State(
-                text=f"URL: {self.browser.current_url}"
-                + (f"\n{self.browser.poi_text}" if self.config.include_poi_text else ""),
-                image=base64_image,
-                html=html_content,
-            ),
-            terminated=False,
-            reward=None,
-            info=info,
-        )
+            return Observation(
+                state=State(
+                    text=f"URL: {self.browser.current_url}"
+                        + (f"\n{self.browser.poi_text}" if self.config.include_poi_text else "")
+                        + credential_info,  # Add credential info here
+                    image=base64_image,
+                    html=html_content,
+                ),
+                terminated=False,
+                reward=None,
+                info=info,
+            )
+
+
+
 
     async def should_perform_action(self) -> bool:
         # if cancelled last action, run the action without updating POIs
@@ -160,11 +183,20 @@ class WebBrowserEnvironment(BaseEnvironment):
         if self.config.keep_original_image:
             info["original_image"] = base64.b64encode(original_img).decode("utf-8")
 
+        # Check for credentials for the current domain
+        current_domain = self.browser.current_url.split("//")[-1].split("/")[0]
+        credentials = self.get_credentials_for_domain(current_domain)
+        
+        credential_info = ""
+        if credentials:
+            credential_info = f"\n[System: Credentials available for {current_domain}: username='{credentials['username']}', password is stored]"
+
         html_content = await self.browser.current_page.content() if self.config.include_html else None
         return Observation(
             state=State(
                 text=f"URL: {self.browser.current_url}"
-                + (f"\n{self.browser.poi_text}" if self.config.include_poi_text else ""),
+                    + (f"\n{self.browser.poi_text}" if self.config.include_poi_text else "")
+                    + credential_info,  # Add credential info here
                 image=base64_image,
                 html=html_content,
                 tool_responses=responses,
@@ -173,7 +205,6 @@ class WebBrowserEnvironment(BaseEnvironment):
             reward=None,
             info=info,
         )
-
     async def observe(self) -> Observation:
         return await self.browser.observe()
 

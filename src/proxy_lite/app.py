@@ -1,12 +1,23 @@
 import asyncio
 import base64
 from io import BytesIO
+import os
 
 import streamlit as st
 from PIL import Image
 
 from proxy_lite import Runner, RunnerConfig
+from dotenv import load_dotenv
+load_dotenv()
 
+
+credentials = {
+    'linkedin': {  # Use a proper website identifier
+        'username': os.getenv('LINKEDIN_USERNAME'),
+        'password': os.getenv('LINKEDIN_PASSWORD'),
+    }
+    # Add more websites as needed
+}
 
 def get_user_config(config_expander):
     config = {
@@ -20,7 +31,8 @@ def get_user_config(config_expander):
             "include_poi_text": True,
             "homepage": "https://www.google.com",
             "keep_original_image": False,
-            "headless": False,  # without proxies headless mode often results in getting bot blocked
+            "headless": True,  # without proxies headless mode often results in getting bot blocked
+            "credentials": credentials,
         },
         "solver": {
             "name": "simple",
@@ -29,7 +41,7 @@ def get_user_config(config_expander):
                 "client": {
                     "name": "convergence",
                     "model_id": "convergence-ai/proxy-lite-3b",
-                    "api_base": "https://convergence-ai-demo-api.hf.space/v1",
+                    "api_base": "",
                 },
             },
         },
