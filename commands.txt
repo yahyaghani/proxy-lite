@@ -1,0 +1,6 @@
+proxy --api_base http://rexter.yahyaghani.com/v1 "go to my linked feed and tell me the latest post"
+
+export PROXY_LITE_API_BASE=http://rexter.yahyaghani.com/v1
+
+
+vllm serve convergence-ai/proxy-lite-3b     --trust-remote-code     --enable-auto-tool-choice     --tool-call-parser hermes     --max-model-len 12096     --port 8008
