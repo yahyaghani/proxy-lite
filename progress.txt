@@ -1,0 +1,1 @@
+stuck on linked captcha ; we need to figure out a captcha method or decouple it with proxy app and use a pyautogui ?
